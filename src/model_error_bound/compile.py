@@ -27,3 +27,15 @@ def quantize_linear_model(model: nn.Module, decimals: int = 2) -> nn.Module:
                 if module.bias is not None:
                     module.bias.copy_(torch.round(module.bias * scale) / scale)
     return compiled
+
+
+def torch_compile_model(model: nn.Module, **kwargs: object) -> nn.Module:
+    """Compile a PyTorch module with `torch.compile`.
+
+    Unlike `quantize_linear_model`, this compiler is intended to preserve the
+    model's numerical behavior. The returned module can still be passed to
+    `MaxBound`; for torch-compiled wrappers around the same module, the formal
+    structural bound is zero and empirical checking measures backend drift.
+    """
+
+    return torch.compile(model, **kwargs)

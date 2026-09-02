@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from model_error_bound import InputDomain, MaxBound, empirical_check, quantize_linear_model
+from model_error_bound import InputDomain, MaxBound, empirical_check, quantize_linear_model, torch_compile_model
 
 
 def test_hand_checkable_single_linear_layer_bound() -> None:
@@ -51,3 +51,16 @@ def test_unsupported_layer_fails_loudly() -> None:
         assert "Unsupported module" in str(exc)
     else:
         raise AssertionError("expected NotImplementedError")
+
+
+def test_torch_compile_wrapper_has_zero_structural_bound() -> None:
+    torch.manual_seed(3)
+    model = nn.Sequential(nn.Linear(2, 3), nn.ReLU(), nn.Linear(3, 1))
+    compiled = torch_compile_model(model, backend="eager")
+    X = InputDomain(torch.tensor([-1.0, -1.0]), torch.tensor([1.0, 1.0]))
+
+    bound = MaxBound(model, compiled, X)
+    check = empirical_check(model, compiled, X, bound, {"samples": 64, "seed": 9})
+
+    assert bound == 0.0
+    assert check["passed"]

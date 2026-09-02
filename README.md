@@ -55,6 +55,9 @@ cases as if they can happen independently.
 
 The included `quantize_linear_model` helper rounds `Linear` weights and biases.
 It is used as a small, explainable stand-in for a compiler or quantization pass.
+The package also includes `torch_compile_model`, which calls `torch.compile` and
+lets the same `MaxBound(model, cl_model, X)` API compare the original module with
+the compiled wrapper.
 
 ## Installation
 
@@ -68,6 +71,7 @@ pip install -e ".[dev]"
 
 ```bash
 python examples/quickstart.py
+python examples/torch_compile_demo.py
 ```
 
 Example usage:
@@ -106,6 +110,7 @@ propagation.
 | --- | --- | --- | --- |
 | Hand-checkable 1D linear model | Exact interval arithmetic | `L-infinity` | Bound equals `1.5` |
 | Small ReLU network with rounded weights | IBP | `L-infinity` | Sampled errors stay below the bound |
+| Small ReLU network with `torch.compile` | IBP over the wrapped original module | `L-infinity` | Structural bound is `0.0`; sampled error was `0.0` on the tested CPU run |
 
 ## Design Walkthrough
 
@@ -117,6 +122,11 @@ propagation.
   errors do not exceed the formal bound.
 - `quantize_linear_model(...)` creates a compiled model by rounding weights and
   biases, giving the example a concrete `cl_func`.
+- `torch_compile_model(...)` creates a `torch.compile` version of the model. In
+  this case the compiled object wraps the same module parameters, so the formal
+  structural bound is zero under the assumption that `torch.compile` preserves
+  the model semantics. The empirical check is still useful for observing backend
+  numerical differences.
 
 ## Running Tests
 

@@ -64,6 +64,24 @@ def MaxBound(
     return_report = bool(cfg.get("return_report", False))
 
     model_lower, model_upper = propagate_intervals(model, domain.lower, domain.upper)
+
+    if _is_torch_compile_wrapper_of(cl_model, model):
+        zero_bound = torch.zeros((), dtype=domain.lower.dtype, device=domain.lower.device)
+        report = BoundReport(
+            bound=float(zero_bound),
+            norm=norm,
+            original_output_lower=model_lower.detach(),
+            original_output_upper=model_upper.detach(),
+            compiled_output_lower=model_lower.detach(),
+            compiled_output_upper=model_upper.detach(),
+            assumptions=[
+                "Input domain is a box: lower <= x <= upper elementwise.",
+                "torch.compile wraps the same PyTorch module and is treated as semantics-preserving for this structural bound.",
+                "The empirical check should still be run to look for observed backend numerical drift.",
+            ],
+        )
+        return report if return_report else report.bound
+
     compiled_lower, compiled_upper = propagate_intervals(cl_model, domain.lower, domain.upper)
 
     exact_diff_interval = _try_exact_linear_difference(model, cl_model, domain.lower, domain.upper)
@@ -95,6 +113,7 @@ def MaxBound(
 def propagate_intervals(model: nn.Module, lower: Tensor, upper: Tensor) -> tuple[Tensor, Tensor]:
     """Propagate lower/upper input bounds through a supported PyTorch module."""
 
+    model = _unwrap_torch_compile(model)
     model.eval()
     with torch.no_grad():
         return _propagate_module(model, lower, upper)
@@ -167,6 +186,17 @@ def _propagate_module(module: nn.Module, lower: Tensor, upper: Tensor) -> tuple[
         f"Unsupported module {module.__class__.__name__}. "
         "Supported modules: Sequential, Linear, ReLU, Flatten, Identity."
     )
+
+
+def _unwrap_torch_compile(model: nn.Module) -> nn.Module:
+    """Return the original module inside a torch.compile OptimizedModule."""
+
+    original = getattr(model, "_orig_mod", None)
+    return original if isinstance(original, nn.Module) else model
+
+
+def _is_torch_compile_wrapper_of(candidate: nn.Module, original: nn.Module) -> bool:
+    return getattr(candidate, "_orig_mod", None) is original
 
 
 def _linear_interval(layer: nn.Linear, lower: Tensor, upper: Tensor) -> tuple[Tensor, Tensor]:
