@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 import torch
 from torch import Tensor, nn
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,7 @@ def MaxBound(
     domain = _coerce_domain(X)
     norm = cfg.get("norm", "linf")
     return_report = bool(cfg.get("return_report", False))
+    logger.info("Computing %s error bound over input shape %s", norm, tuple(domain.lower.shape))
 
     model_lower, model_upper = propagate_intervals(model, domain.lower, domain.upper)
 
@@ -80,6 +85,7 @@ def MaxBound(
                 "The empirical check should still be run to look for observed backend numerical drift.",
             ],
         )
+        logger.info("Using semantics-preserving torch.compile assumption; bound=%s", report.bound)
         return report if return_report else report.bound
 
     compiled_lower, compiled_upper = propagate_intervals(cl_model, domain.lower, domain.upper)
@@ -107,6 +113,7 @@ def MaxBound(
             method_note,
         ],
     )
+    logger.info("Computed formal bound=%s using interval propagation", report.bound)
     return report if return_report else report.bound
 
 

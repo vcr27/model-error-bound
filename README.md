@@ -59,6 +59,13 @@ The package also includes `torch_compile_model`, which calls `torch.compile` and
 lets the same `MaxBound(model, cl_model, X)` API compare the original module with
 the compiled wrapper.
 
+The Hugging Face demonstration loads a real fine-tuned tiny BERT model and
+verifies one well-defined supported slice: its classification head
+(`Linear`; evaluation-time dropout is the identity). It does **not** claim to
+verify the complete transformer. Extending the formal guarantee through the full
+model would require sound rules for embeddings, attention, LayerNorm, residual
+connections, and other operations.
+
 ## Installation
 
 ```bash
@@ -72,6 +79,7 @@ pip install -e ".[dev]"
 ```bash
 python examples/quickstart.py
 python examples/torch_compile_demo.py
+python examples/huggingface_demo.py
 ```
 
 Example usage:
@@ -111,6 +119,7 @@ propagation.
 | Hand-checkable 1D linear model | Exact interval arithmetic | `L-infinity` | Bound equals `1.5` |
 | Small ReLU network with rounded weights | IBP | `L-infinity` | Sampled errors stay below the bound |
 | Small ReLU network with `torch.compile` | IBP over the wrapped original module | `L-infinity` | Structural bound is `0.0`; sampled error was `0.0` on the tested CPU run |
+| Real Hugging Face tiny BERT classification head | IBP over a supported model slice | `L-infinity` | Sampled errors stay below the formal bound |
 
 ## Design Walkthrough
 
@@ -127,6 +136,11 @@ propagation.
   structural bound is zero under the assumption that `torch.compile` preserves
   the model semantics. The empirical check is still useful for observing backend
   numerical differences.
+- `extract_sequence_classification_head(...)` adapts the deterministic head of
+  a Hugging Face BERT or DistilBERT sequence classifier. Dropout is omitted
+  because the model is placed in evaluation mode, where dropout is the identity.
+  The formal claim applies to this head and its hidden-feature box `X`, not to
+  token inputs or the full transformer.
 
 ## Running Tests
 
